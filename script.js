@@ -1,4 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+    if (!location.hash || location.hash === '#home') scrollTo({ top: 0, left: 0, behavior: 'auto' });
     const header = document.querySelector('.site-header');
     const toggle = document.querySelector('.menu-toggle');
     const nav = document.querySelector('.site-nav');
@@ -8,6 +10,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const showToast = message => { toast.textContent = message; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 3200); };
     founderImage.addEventListener('error', event => { event.currentTarget.style.display = 'none'; });
     if (founderImage.complete && founderImage.naturalWidth === 0) founderImage.style.display = 'none';
+    const main = document.querySelector('#main-content');
+    const orderedSections = ['home', 'about', 'services', 'solutions', 'web-showcase', 'why-charanex', 'industries', 'founder', 'leadership', 'contact'].map(id => document.querySelector(`#${id}`) || document.querySelector(`.${id}`));
+    const processSection = document.querySelector('.process')?.closest('section');
+    const ctaSection = document.querySelector('.cta');
+    main.append(...[...orderedSections.slice(0, 9), processSection, ctaSection, orderedSections[9]].filter(Boolean));
     const closeMenu = () => { nav.classList.remove('open'); toggle.setAttribute('aria-expanded', 'false'); document.body.classList.remove('no-scroll'); };
     toggle.addEventListener('click', () => { const open = toggle.getAttribute('aria-expanded') === 'true'; toggle.setAttribute('aria-expanded', String(!open)); nav.classList.toggle('open', !open); document.body.classList.toggle('no-scroll', !open); });
     document.querySelectorAll('.nav-link').forEach(link => link.addEventListener('click', closeMenu));
@@ -15,6 +22,36 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateScroll = () => { header.classList.toggle('scrolled', scrollY > 24); topButton.classList.toggle('visible', scrollY > 600); let current = 'home'; sections.forEach(section => { if (scrollY + 150 >= section.offsetTop) current = section.id; }); document.querySelectorAll('.nav-link').forEach(link => link.classList.toggle('active', link.hash === `#${current}`)); };
     addEventListener('scroll', updateScroll, { passive: true }); updateScroll();
     topButton.addEventListener('click', () => scrollTo({ top: 0, behavior: 'smooth' }));
+    const industryDetails = {
+        'Businesses & Startups': { overview: 'Digital technology solutions that help businesses and startups establish, improve and scale their digital operations.', needs: ['Professional websites', 'Custom software', 'Digital platforms', 'Business automation', 'B2B lead generation'], help: 'Provide practical web, software, IT and digital solutions based on business requirements.' },
+        Education: { overview: 'Modern digital solutions for schools, colleges, training institutes and education-focused organizations.', needs: ['Educational websites', 'Student-facing platforms', 'Digital resources', 'Software solutions', 'Process automation'], help: 'Build modern digital experiences that support educational organizations and their technology needs.' },
+        Healthcare: { overview: 'Digital experiences and software solutions designed around the needs of healthcare organizations.', needs: ['Healthcare websites', 'Digital information platforms', 'Appointment-related experiences', 'Business software', 'Process automation'], help: 'Create reliable and user-friendly digital solutions for healthcare organizations.' },
+        Hospitality: { overview: 'Technology solutions for hotels, restaurants and hospitality businesses looking to strengthen their digital presence.', needs: ['Hotel websites', 'Restaurant websites', 'Digital experiences', 'Customer-facing platforms', 'Business automation'], help: 'Create polished digital experiences that represent hospitality brands professionally.' },
+        'Real Estate': { overview: 'Digital platforms and technology solutions for real estate businesses and property-focused organizations.', needs: ['Real estate websites', 'Property listing experiences', 'Lead generation', 'Business software', 'Digital platforms'], help: 'Build modern digital experiences that help real estate organizations manage and present their online presence.' },
+        'Retail & E-commerce': { overview: 'Modern web and software solutions that help retail businesses create stronger digital experiences.', needs: ['E-commerce websites', 'Product platforms', 'Business websites', 'Customer-facing experiences', 'Automation'], help: 'Develop scalable digital experiences for retail and online businesses.' }
+    };
+    const industryModal = document.createElement('div');
+    industryModal.className = 'industry-modal';
+    industryModal.id = 'industry-modal';
+    industryModal.setAttribute('role', 'dialog');
+    industryModal.setAttribute('aria-modal', 'true');
+    industryModal.setAttribute('aria-labelledby', 'industry-modal-title');
+    industryModal.setAttribute('aria-hidden', 'true');
+    industryModal.innerHTML = '<div class="industry-modal-backdrop" data-industry-close></div><div class="industry-modal-panel" role="document"><button class="industry-modal-close" type="button" aria-label="Close industry details">×</button><div class="industry-modal-icon" aria-hidden="true"></div><span class="industry-modal-number"></span><h2 id="industry-modal-title"></h2><p class="industry-modal-overview"></p><h3>What you may need</h3><ul class="industry-modal-list"></ul><h3>How CharanEx can help</h3><p class="industry-modal-help"></p><a class="button primary industry-modal-contact" href="#contact">Let&#39;s Talk <span>↗</span></a></div>';
+    document.body.append(industryModal);
+    const industryModalTitle = industryModal.querySelector('#industry-modal-title');
+    const industryModalNumber = industryModal.querySelector('.industry-modal-number');
+    const industryModalIcon = industryModal.querySelector('.industry-modal-icon');
+    const industryModalOverview = industryModal.querySelector('.industry-modal-overview');
+    const industryModalList = industryModal.querySelector('.industry-modal-list');
+    const industryModalHelp = industryModal.querySelector('.industry-modal-help');
+    let lastIndustryTrigger;
+    const closeIndustryModal = () => { industryModal.classList.remove('is-open'); industryModal.setAttribute('aria-hidden', 'true'); document.body.classList.remove('no-scroll'); if (lastIndustryTrigger) lastIndustryTrigger.focus(); };
+    const openIndustryModal = trigger => { const title = trigger.querySelector('h3').textContent.trim(); const detail = industryDetails[title]; if (!detail) return; lastIndustryTrigger = trigger; industryModalTitle.textContent = title; industryModalNumber.textContent = trigger.querySelector('.industry-number').textContent; industryModalIcon.innerHTML = trigger.querySelector('.industry-icon').innerHTML; industryModalOverview.textContent = detail.overview; industryModalList.innerHTML = detail.needs.map(need => `<li>${need}</li>`).join(''); industryModalHelp.textContent = detail.help; industryModal.classList.add('is-open'); industryModal.setAttribute('aria-hidden', 'false'); document.body.classList.add('no-scroll'); industryModal.querySelector('.industry-modal-close').focus(); };
+    document.querySelectorAll('.industry-card').forEach(card => { const button = document.createElement('button'); button.type = 'button'; button.className = card.className; button.setAttribute('aria-label', `View ${card.querySelector('h3').textContent.trim()} details`); button.innerHTML = card.innerHTML; card.replaceWith(button); button.addEventListener('click', () => openIndustryModal(button)); });
+    industryModal.querySelectorAll('[data-industry-close]').forEach(element => element.addEventListener('click', closeIndustryModal));
+    industryModal.querySelector('.industry-modal-contact').addEventListener('click', closeIndustryModal);
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && industryModal.classList.contains('is-open')) closeIndustryModal(); });
     const observer = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('visible'); observer.unobserve(entry.target); } }), { threshold: .12 });
     document.querySelectorAll('.reveal').forEach(element => observer.observe(element));
     document.querySelectorAll('.showcase-image img').forEach(image => { const markUnavailable = () => image.closest('.showcase-image').classList.add('image-unavailable'); image.addEventListener('error', markUnavailable); if (image.complete && image.naturalWidth === 0) markUnavailable(); });
