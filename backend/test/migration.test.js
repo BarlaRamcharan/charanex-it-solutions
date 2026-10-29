@@ -11,9 +11,11 @@ const { createMemoryDatabase, preparePostgresDatabase } = require('../test-suppo
 function createMigrationPool() {
     const applied = new Set();
     const statements = [];
+    const queries = [];
     const client = {
         async query(sql, values = []) {
             statements.push(sql.trim());
+            queries.push({ sql: sql.trim(), values });
             if (sql.includes('SELECT 1 FROM schema_migrations')) {
                 return { rows: [], rowCount: applied.has(values[0]) ? 1 : 0 };
             }
@@ -29,6 +31,7 @@ function createMigrationPool() {
     return {
         applied,
         statements,
+        queries,
         async connect() {
             return client;
         }
@@ -42,6 +45,13 @@ test('PostgreSQL migrations run in order, record versions, lock, and are repeata
     assert.deepEqual([...pool.applied], expected);
     assert.ok(pool.statements.some(statement => statement.includes('pg_advisory_lock')));
     assert.ok(pool.statements.some(statement => statement.includes('pg_advisory_unlock')));
+    const lockQueries = pool.queries.filter(({ sql }) =>
+        sql.includes('pg_advisory_lock') || sql.includes('pg_advisory_unlock')
+    );
+    assert.deepEqual(lockQueries.map(({ values }) => values), [
+        ['4848196820403111256'],
+        ['4848196820403111256']
+    ]);
     assert.equal(pool.statements.filter(statement => statement === 'BEGIN').length, 2);
     assert.equal(pool.statements.filter(statement => statement === 'COMMIT').length, 2);
 

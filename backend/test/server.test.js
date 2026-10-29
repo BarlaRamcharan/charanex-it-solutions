@@ -6,8 +6,7 @@ const { prepareDatabase } = require('../src/server');
 test('PostgreSQL startup checks connectivity before and after applying migrations', async () => {
     const config = loadConfig({
         DATABASE_URL: 'postgres://charanex:local-password@localhost:5432/charanex',
-        SESSION_SECRET: 'test-session-secret-with-more-than-32-characters',
-        NODE_ENV: 'production'
+        SESSION_SECRET: 'test-session-secret-with-more-than-32-characters'
     });
     const startupSequence = [];
     const database = {

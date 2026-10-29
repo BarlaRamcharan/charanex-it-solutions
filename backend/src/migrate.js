@@ -3,7 +3,7 @@ const path = require('node:path');
 const { loadConfig } = require('./config');
 const { createDatabase } = require('./database');
 
-const MIGRATION_LOCK_ID = '43484152414e4558';
+const MIGRATION_LOCK_ID = BigInt('0x43484152414e4558').toString();
 const DEFAULT_MIGRATIONS_DIRECTORY = path.join(__dirname, '..', 'migrations', 'postgres');
 
 async function migrate(pool, migrationsDirectory = DEFAULT_MIGRATIONS_DIRECTORY) {
