@@ -2,7 +2,7 @@ const readline = require('node:readline/promises');
 const { stdin, stdout } = require('node:process');
 const bcrypt = require('bcryptjs');
 const { loadConfig } = require('./config');
-const { openDatabase } = require('./database');
+const { createDatabase } = require('./database');
 const { migrate } = require('./migrate');
 
 async function createAdmin(database, email, password) {
@@ -15,7 +15,10 @@ async function createAdmin(database, email, password) {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    database.prepare('INSERT INTO admins (email, password_hash) VALUES (?, ?)').run(normalizedEmail, passwordHash);
+    await database.query(
+        'INSERT INTO admins (email, password_hash) VALUES ($1, $2)',
+        [normalizedEmail, passwordHash]
+    );
 }
 
 if (require.main === module) {
@@ -24,8 +27,8 @@ if (require.main === module) {
         let prompt;
         try {
             const config = loadConfig();
-            database = openDatabase(config.databasePath);
-            migrate(database);
+            database = createDatabase(config);
+            await migrate(database);
             prompt = readline.createInterface({ input: stdin, output: stdout });
             const email = await prompt.question('Administrator email: ');
             const password = await prompt.question('Administrator password (12+ characters): ');
@@ -36,7 +39,7 @@ if (require.main === module) {
             process.exitCode = 1;
         } finally {
             if (prompt) prompt.close();
-            if (database && database.open) database.close();
+            if (database) await database.end();
         }
     })();
 }

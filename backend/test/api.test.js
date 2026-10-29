@@ -46,7 +46,7 @@ async function signedIn(app, password) {
 
 test('contact endpoint validates, rate-limits through middleware, and persists valid enquiries', async t => {
     const { app, database } = await createTestContext();
-    t.after(() => database.close());
+    t.after(() => database.end());
 
     const invalid = await request(app).post('/api/contact').send({ ...validEnquiry, email: 'invalid' });
     assert.equal(invalid.status, 422);
@@ -56,7 +56,7 @@ test('contact endpoint validates, rate-limits through middleware, and persists v
     assert.equal(spam.status, 400);
     const accepted = await request(app).post('/api/contact').send(validEnquiry);
     assert.equal(accepted.status, 201);
-    const rows = database.prepare('SELECT name, email, status, service_of_interest FROM enquiries').all();
+    const { rows } = await database.query('SELECT name, email, status, service_of_interest FROM enquiries');
     assert.equal(rows.length, 1);
     assert.equal(rows[0].email, 'casey@example.test');
     assert.equal(rows[0].service_of_interest, 'Web Development');
@@ -64,7 +64,7 @@ test('contact endpoint validates, rate-limits through middleware, and persists v
 
 test('contact endpoint rejects submissions above the per-IP limit', async t => {
     const { app, database } = await createTestContext();
-    t.after(() => database.close());
+    t.after(() => database.end());
     const responses = [];
     for (let index = 0; index < 6; index++) {
         responses.push(await request(app).post('/api/contact').send({
@@ -78,7 +78,7 @@ test('contact endpoint rejects submissions above the per-IP limit', async t => {
 
 test('contact endpoint returns explicit malformed JSON and missing-route errors', async t => {
     const { app, database } = await createTestContext();
-    t.after(() => database.close());
+    t.after(() => database.end());
     const malformed = await request(app)
         .post('/api/contact')
         .set('Content-Type', 'application/json')
@@ -91,14 +91,14 @@ test('contact endpoint returns explicit malformed JSON and missing-route errors'
 
 test('database health endpoint reports availability and database failures', async t => {
     const { app, database } = await createTestContext();
-    t.after(() => {
-        if (database.open) database.close();
-    });
+    t.after(() => database.end());
     const healthy = await request(app).get('/api/health');
     assert.equal(healthy.status, 200);
     assert.deepEqual(healthy.body, { status: 'ok' });
 
-    database.close();
+    database.query = async () => {
+        throw new Error('test database unavailable');
+    };
     const unavailable = await request(app).get('/api/health');
     assert.equal(unavailable.status, 500);
     assert.deepEqual(unavailable.body, { error: 'The request could not be completed. Please try again.' });
@@ -106,7 +106,7 @@ test('database health endpoint reports availability and database failures', asyn
 
 test('public API exposes only the configured site origin and serves an unprivileged admin shell', async t => {
     const { app, database } = await createTestContext();
-    t.after(() => database.close());
+    t.after(() => database.end());
     const preflight = await request(app)
         .options('/api/contact')
         .set('Origin', 'http://127.0.0.1:5500')
@@ -126,7 +126,7 @@ test('public API exposes only the configured site origin and serves an unprivile
 
 test('admin authentication protects records and manages applications, resumes, and jobs', async t => {
     const { app, database, password } = await createTestContext();
-    t.after(() => database.close());
+    t.after(() => database.end());
 
     const denied = await request(app).get('/api/admin/applications');
     assert.equal(denied.status, 401);
@@ -231,7 +231,9 @@ test('admin authentication protects records and manages applications, resumes, a
     assert.deepEqual(list.body.applications[0].relevantSkills, ['JavaScript', 'Node.js']);
     assert.equal(list.body.applications[0].education, 'BSc Computer Science');
     const summary = await agent.get('/api/admin/summary');
-    assert.deepEqual(summary.body.counts, { enquiries: 0, applications: 1, active_jobs: 1 });
+    const counts = Object.fromEntries(Object.entries(summary.body.counts)
+        .map(([key, value]) => [key, Array.isArray(value) ? value[0] : value]));
+    assert.deepEqual(counts, { enquiries: 0, applications: 1, active_jobs: 1 });
 
     const downloaded = await agent.get(`/api/admin/applications/${applicationId}/resume`);
     assert.equal(downloaded.status, 200);
@@ -278,7 +280,7 @@ test('admin authentication protects records and manages applications, resumes, a
 
 test('application submission IDs prevent duplicate database records', async t => {
     const { app, database, password } = await createTestContext();
-    t.after(() => database.close());
+    t.after(() => database.end());
     const agent = await signedIn(app, password);
     const createdJob = await agent.post('/api/admin/jobs')
         .set('Origin', origin)
@@ -301,13 +303,13 @@ test('application submission IDs prevent duplicate database records', async t =>
         .attach('resume', Buffer.from('%PDF-1.7 valid test fixture'), { filename: 'resume.pdf', contentType: 'application/pdf' });
     assert.equal((await createSubmission()).status, 201);
     assert.equal((await createSubmission()).status, 409);
-    const rows = database.prepare('SELECT id FROM applications').all();
+    const { rows } = await database.query('SELECT id FROM applications');
     assert.equal(rows.length, 1);
 });
 
 test('admins can search, filter, update, and delete contact enquiries', async t => {
     const { app, database, password } = await createTestContext();
-    t.after(() => database.close());
+    t.after(() => database.end());
     const submitted = await request(app).post('/api/contact').send(validEnquiry);
     assert.equal(submitted.status, 201);
     const agent = await signedIn(app, password);
@@ -329,7 +331,7 @@ test('admins can search, filter, update, and delete contact enquiries', async t 
 
 test('admin mutations reject cross-origin requests and invalid job records', async t => {
     const { app, database, password } = await createTestContext();
-    t.after(() => database.close());
+    t.after(() => database.end());
     const agent = await signedIn(app, password);
     const crossOrigin = await agent.post('/api/admin/jobs')
         .set('Origin', 'https://untrusted.example')

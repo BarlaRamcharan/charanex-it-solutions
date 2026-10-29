@@ -1,44 +1,93 @@
 # CharanEx backend setup
 
-The existing GitHub Pages site remains a static frontend. The separate Express
-service in `backend/` provides the database-backed contact, careers, and admin
-features. No credentials belong in the frontend.
+The GitHub Pages site remains the static frontend. The separate Express service
+in `backend/` provides database-backed contact, careers, and admin features. No
+database credentials belong in the frontend.
 
-## Local setup
+## Local development
 
-Requirements: Node.js 20+. SQLite is included and initialized by the backend.
+Requirements: Node.js 20+ and a PostgreSQL server.
 
-1. In `backend/`, copy `.env.example` to `.env` and set `SESSION_SECRET` (at
-   least 32 random characters) and `FRONTEND_ORIGIN`. `SQLITE_PATH` defaults
-   to `data/charanex.sqlite`, relative to `backend/`. Keep `.env` private; it
-   is ignored by Git.
-2. Install backend dependencies with `npm install`.
-3. Apply schema migrations with `node --env-file=.env src/migrate.js`.
-   Startup also applies pending migrations before the server accepts requests.
-4. Create an administrator interactively with `node --env-file=.env src/create-admin.js`. The
-   password is hashed before it is saved; there is no default admin account.
+1. In `backend/`, copy `.env.example` to `.env`. Set `DATABASE_URL` to a
+   PostgreSQL connection URL, keep `PGSSLMODE=disable` for a local database,
+   set `SESSION_SECRET` to at least 32 random characters, and configure
+   `FRONTEND_ORIGIN`. Keep `.env` private; Git ignores it.
+2. Install dependencies with `npm install`.
+3. Run `npm run migrate`. The server also applies pending PostgreSQL migrations
+   before accepting requests.
+4. Create an administrator with `npm run admin:create`. The interactive script
+   hashes the password; no default admin account exists.
 5. Start the API with `npm run dev`. The service binds to `0.0.0.0` and uses
    `PORT`, defaulting to `3000`.
 
-Optional SMTP notifications are disabled unless all SMTP and notification
-variables in `.env.example` are configured. The database remains the source of
-truth for submissions if notifications are not configured.
+The PostgreSQL schema and ordered migration ledger are in
+`backend/migrations/postgres/`. The prior SQLite migrations remain available
+only to read an existing SQLite database during a one-time import; the running
+server never falls back to SQLite.
 
-## Deployment outline
+## Importing existing SQLite records
 
-Recommended low-complexity setup: keep GitHub Pages for the static frontend
-and host the existing Node service on a provider that supports persistent
-mounted disks. SQLite requires the database file to remain on that disk across
-deploys and restarts. Do not use the service's ephemeral filesystem, run
-multiple backend instances against a local SQLite file, or share it over a
-network filesystem. No provider resources are created by this repository.
-Check the provider's current disk pricing, backup, region, and retention
-options before provisioning anything.
+If the existing deployment has a SQLite database, preserve a backup and do not
+switch traffic until its import has been verified. This import reads the source
+database in read-only mode, does not delete or alter it, and imports admins,
+enquiries, jobs, applications, live sessions, and private resume BLOBs in one
+PostgreSQL transaction. It refuses to overwrite conflicting PostgreSQL records
+and rolls the import back if a record cannot be preserved.
 
-### Create the backend service
+Run the import from a trusted machine that can reach the PostgreSQL database:
 
-Create a Node web service from the existing GitHub repository and attach a
-persistent disk mounted at `/var/data`. Configure the web service:
+```text
+cd backend
+copy .env.example .env
+```
+
+Set `DATABASE_URL` in the local, ignored `.env` to the target database URL. For
+an external TLS connection set `PGSSLMODE=require`. Then run:
+
+```text
+npm run import:sqlite -- "C:\path\to\backed-up-charanex.sqlite"
+```
+
+The SQLite import driver is a development dependency used only by this command.
+Do not upload the SQLite file or resume files to a public location. Importing
+will fail rather than merge or overwrite duplicate target IDs or records.
+Review the printed row counts and verify imported records before directing
+website traffic to the new backend. If there is no SQLite database to preserve,
+skip the import.
+
+## Tests
+
+Run the default backend suite with:
+
+```text
+npm test
+```
+
+The API and session tests use `pg-mem` to exercise PostgreSQL-dialect queries
+without requiring a running server. To also test against a real PostgreSQL
+instance, create a dedicated disposable database whose name contains `test`,
+then provide its connection string as `TEST_DATABASE_URL` and run:
+
+```text
+npm run test:postgres
+```
+
+That test applies migrations and creates then removes a temporary contact
+record. Never point `TEST_DATABASE_URL` at a production or data-bearing
+database. The real-PostgreSQL test is skipped when `TEST_DATABASE_URL` is unset;
+an emulator pass alone is not proof that a managed PostgreSQL deployment is
+reachable or persistent.
+
+## Render deployment
+
+Keep GitHub Pages for the existing static frontend and run the Express API as a
+separate Render web service. Use Render's managed PostgreSQL service, not local
+SQLite: Render's free web service filesystem is not persistent. Do not add a
+disk mount or use `/var/data`. Check Render's current free-database availability,
+capacity, backup, expiration, and retention limits before choosing it; do not
+assume free-tier PostgreSQL is permanent or suitable for production data.
+
+Configure the backend web service:
 
 | Setting | Value |
 | --- | --- |
@@ -48,73 +97,60 @@ persistent disk mounted at `/var/data`. Configure the web service:
 | Start command | `npm start` |
 | Health-check path | `/api/health` |
 
-Set these service environment variables in the provider dashboard:
+Create or select a PostgreSQL database and set the service's environment
+variables in Render's dashboard:
 
 | Variable | Value |
 | --- | --- |
 | `NODE_ENV` | `production` |
-| `SQLITE_PATH` | `/var/data/charanex.sqlite` |
+| `DATABASE_URL` | Render's private/internal PostgreSQL connection URL |
+| `PGSSLMODE` | `require` for TLS, especially external database connections |
 | `SESSION_SECRET` | New random secret of at least 32 characters |
 | `FRONTEND_ORIGIN` | `https://barlaramcharan.github.io` |
-| `PORT` | Leave unset; the provider supplies it |
+| `PORT` | Leave unset; Render supplies it |
 
-The service reads the assigned `PORT`, binds to `0.0.0.0`, creates the parent
-directory, and exposes a health endpoint that checks database connectivity.
-Startup applies ordered SQLite migrations transactionally; migrations are
-tracked in `schema_migrations`. Do not manually recreate tables or mark
-migrations applied by hand. Back up `charanex.sqlite` and its associated
-`-wal`/`-shm` files consistently (prefer a SQLite backup/checkpoint procedure)
-before making changes to an existing production database.
+Never put connection URLs, passwords, session secrets, or admin credentials in
+the repository, frontend, logs, or issue reports. In production, TLS is enabled
+by default; `PGSSLMODE` accepts only `require` or `disable`. Do not disable TLS
+for an external production database connection.
 
-The previous backend used PostgreSQL, but no PostgreSQL connection string or
-database file is present in this repository. SQLite migrations do not import a
-PostgreSQL database. If the existing service has any live records, do not switch
-traffic until a separate export/import has been tested against a backup and
-verified for enquiries, jobs, applications, administrators, sessions, and
-resume BLOBs.
-The new backend refuses to start if a legacy `DATABASE_URL` remains configured;
-remove that variable only after the existing data has been accounted for.
+The service applies pending PostgreSQL migrations and checks database
+connectivity before it begins listening. `/api/health` returns
+`{"status":"ok"}` only when the database query succeeds. This does not verify
+data retention across a provider restart or database expiry.
 
 After the backend is healthy, create the initial administrator from the
 provider's service shell with `npm run admin:create`. The script prompts for
-credentials and stores only a password hash. Do not put admin credentials in
-the repository or frontend.
+credentials and stores only a password hash. The existing admin UI is served
+at `https://<backend-host>/admin`; authentication remains required.
 
-### Connect and verify GitHub Pages
+## Connect and verify GitHub Pages
 
-After the backend has a stable public HTTPS URL, update the public,
-non-secret `charanex-api-base` meta value in `index.html` from empty to that
-origin, for example `https://<backend-host>`, and publish the existing Pages
-frontend using the repository's existing deployment settings. Do not add a
-trailing slash. The exact URL cannot be set before the provider assigns it.
+After the backend has a stable public HTTPS URL, set the public, non-secret
+`charanex-api-base` meta value in `index.html` to that origin (without a
+trailing slash), then publish the existing Pages frontend using its current
+repository deployment settings. The Pages URL remains
+`https://barlaramcharan.github.io/charanex-it-solutions/`.
 
 Verify after deployment:
 
 1. `GET https://<backend-host>/api/health` returns HTTP 200 and
-   `{"status":"ok"}`. This checks database connectivity, not record retention.
+   `{"status":"ok"}`.
 2. Load the existing Pages URL and confirm public jobs load. Submit one
-   controlled contact enquiry and one test application only after publishing
-   a temporary test job in `/admin`.
+   controlled contact enquiry and one test application only after publishing a
+   temporary test job in `/admin`.
 3. Confirm an unapproved origin is rejected, unauthenticated admin API calls
    return 401, and an authenticated administrator can access the test records
    and download the test resume.
-4. Restart/redeploy the backend, then confirm the test records and job remain
-   available. This step verifies actual disk persistence.
-5. Remove test records/job and resume after verification, if no longer needed.
+4. Restart/redeploy the backend and verify the records remain available. Also
+   verify managed database retention against the provider's actual policy.
+5. Remove test records, job, and resume after verification if no longer needed.
 
-The admin UI is served by the backend at `https://<backend-host>/admin`, so
-admin session cookies remain same-origin. Public Pages submissions use the
-backend's exact-origin CORS allowlist and do not send admin cookies. Resume
-downloads remain private behind backend authorization; never upload resumes to
-public object storage or expose database credentials in frontend files.
+Public Pages submissions use the backend's exact-origin CORS allowlist and do
+not send admin cookies. Admin session cookies remain same-origin. Resume data is
+stored in private PostgreSQL `BYTEA` columns and is downloadable only through
+authorized admin endpoints; it is never exposed in public listings.
 
-The Pages URL remains `https://barlaramcharan.github.io/charanex-it-solutions/`.
-No deployment has been run or verified yet.
-
-Resumes are validated and stored as private SQLite BLOB data, then
-available only through authenticated admin downloads. Back up the database
-regularly; do not expose database credentials or resume data in browser code.
-No hosting resources are provisioned by this repository. A persistent disk and
-always-on web service may incur cost. Production persistence has not been
-verified until records and resume downloads are confirmed after a real
-host-level restart/redeploy.
+No hosting resources have been provisioned and no deployment has been run or
+verified. Production connectivity and persistence remain to be tested after
+the service and managed database are configured.

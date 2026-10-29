@@ -1,13 +1,36 @@
-const path = require('node:path');
-
 function loadConfig(env = process.env) {
+    const production = env.NODE_ENV === 'production';
     const port = Number(env.PORT || 3000);
     if (!Number.isInteger(port) || port < 1 || port > 65535) {
         throw new Error('PORT must be an integer from 1 to 65535.');
     }
 
-    if (env.DATABASE_URL) {
-        throw new Error('DATABASE_URL is still configured. Back up and migrate existing records before switching to SQLite.');
+    if (env.SQLITE_PATH) {
+        throw new Error('SQLITE_PATH is no longer supported. Configure DATABASE_URL for PostgreSQL.');
+    }
+
+    if (typeof env.DATABASE_URL !== 'string' || !env.DATABASE_URL.trim()) {
+        throw new Error('DATABASE_URL must contain a PostgreSQL connection URL.');
+    }
+    let databaseUrl;
+    let connectionSslMode;
+    try {
+        const parsedUrl = new URL(env.DATABASE_URL);
+        if (!['postgres:', 'postgresql:'].includes(parsedUrl.protocol)
+            || !parsedUrl.hostname
+            || parsedUrl.pathname.length < 2) {
+            throw new Error();
+        }
+        connectionSslMode = parsedUrl.searchParams.get('sslmode');
+        parsedUrl.searchParams.delete('sslmode');
+        databaseUrl = parsedUrl.toString();
+    } catch {
+        throw new Error('DATABASE_URL must be a valid PostgreSQL connection URL.');
+    }
+
+    const sslMode = env.PGSSLMODE || (production ? 'require' : connectionSslMode || 'disable');
+    if (!['require', 'disable'].includes(sslMode)) {
+        throw new Error('PGSSLMODE must be either require or disable.');
     }
 
     if (!env.SESSION_SECRET || env.SESSION_SECRET.length < 32) {
@@ -40,12 +63,11 @@ function loadConfig(env = process.env) {
 
     return {
         port,
-        databasePath: path.isAbsolute(env.SQLITE_PATH || '')
-            ? env.SQLITE_PATH
-            : path.resolve(__dirname, '..', env.SQLITE_PATH || 'data/charanex.sqlite'),
+        databaseUrl,
+        databaseSsl: sslMode === 'require',
         sessionSecret: env.SESSION_SECRET,
         frontendOrigin,
-        production: env.NODE_ENV === 'production',
+        production,
         smtp: smtpEnabled ? {
             host: env.SMTP_HOST,
             port: smtpPort,
