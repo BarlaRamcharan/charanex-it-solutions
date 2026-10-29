@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://charanex.github.io/sitemap.xml
+Sitemap: https://barlaramcharan.github.io/charanex-it-solutions/sitemap.xml
