@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const tls = require('node:tls');
 const { createDatabase } = require('../src/database');
 const { PostgresSessionStore } = require('../src/session-store');
 const { createTestContext } = require('../test-support/helpers');
@@ -13,11 +14,14 @@ test('database pool uses the configured PostgreSQL URL and verified TLS policy',
 
     const config = {
         databaseUrl: 'postgres://charanex:local-password@localhost:5432/charanex',
-        databaseSsl: true
+        databaseSsl: true,
+        databaseCa: '-----BEGIN CERTIFICATE-----\ntrusted-root\n-----END CERTIFICATE-----'
     };
     const pool = createDatabase(config, PoolProbe);
     assert.equal(pool.options.connectionString, config.databaseUrl);
-    assert.deepEqual(pool.options.ssl, { rejectUnauthorized: true });
+    assert.equal(pool.options.ssl.rejectUnauthorized, true);
+    assert.deepEqual(pool.options.ssl.ca.slice(0, tls.rootCertificates.length), tls.rootCertificates);
+    assert.equal(pool.options.ssl.ca.at(-1), config.databaseCa);
     assert.equal(pool.options.max, 5);
     assert.equal(pool.options.connectionTimeoutMillis, 10_000);
 });

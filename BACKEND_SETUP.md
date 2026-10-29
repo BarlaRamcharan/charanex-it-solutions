@@ -104,15 +104,29 @@ variables in Render's dashboard:
 | --- | --- |
 | `NODE_ENV` | `production` |
 | `DATABASE_URL` | Render's private/internal PostgreSQL connection URL |
-| `PGSSLMODE` | `require` for TLS, especially external database connections |
+| `PGSSLMODE` | `require` |
+| `PGSSLROOTCERT` | `/etc/secrets/supabase-root-ca.crt` |
 | `SESSION_SECRET` | New random secret of at least 32 characters |
 | `FRONTEND_ORIGIN` | `https://barlaramcharan.github.io` |
 | `PORT` | Leave unset; Render supplies it |
 
+In the Supabase Dashboard, open **Database Settings → SSL Configuration** and
+download the project's root certificate. In Render's service **Environment**
+settings, add that PEM certificate as a **Secret File** named
+`supabase-root-ca.crt`, then set `PGSSLROOTCERT` to
+`/etc/secrets/supabase-root-ca.crt`. Do not paste the certificate into source
+control, the frontend, or logs. The backend reads the file at startup and adds
+it to Node's standard trusted roots for node-postgres with
+`rejectUnauthorized: true`; Node also verifies that the server hostname
+matches the certificate. Production startup fails clearly if the CA file is
+absent or unreadable.
+
 Never put connection URLs, passwords, session secrets, or admin credentials in
-the repository, frontend, logs, or issue reports. In production, TLS is enabled
-by default; `PGSSLMODE` accepts only `require` or `disable`. Do not disable TLS
-for an external production database connection.
+the repository, frontend, logs, or issue reports. `PGSSLMODE=require` encrypts
+the connection; the explicit Supabase CA enables trust-chain verification while
+certificate verification stays enabled. Production refuses `PGSSLMODE=disable`.
+For local development, the example config keeps TLS disabled for a local
+PostgreSQL instance.
 
 The service applies pending PostgreSQL migrations and checks database
 connectivity before it begins listening. `/api/health` returns
