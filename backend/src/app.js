@@ -1,4 +1,5 @@
 const path = require('node:path');
+const fs = require('node:fs/promises');
 const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
@@ -440,6 +441,34 @@ function createApp({ database, config, sessionStore, logger = console }) {
     const publicDirectory = path.join(__dirname, '..', 'public');
     app.use('/admin-assets', express.static(publicDirectory, { index: false, dotfiles: 'deny' }));
     app.get(['/admin', '/admin/'], (_req, res) => res.sendFile(path.join(publicDirectory, 'admin.html')));
+
+    const frontendDirectory = path.join(__dirname, '..', '..');
+    app.get('/', asyncRoute(async (req, res) => {
+        const indexPath = path.join(frontendDirectory, 'index.html');
+        const indexHtml = await fs.readFile(indexPath, 'utf8');
+        const apiBaseMeta = '<meta name="charanex-api-base" content="">';
+        if (!indexHtml.includes(apiBaseMeta)) {
+            throw new Error('The frontend index is missing its CharanEx API base placeholder.');
+        }
+        const apiOrigin = new URL(`${req.protocol}://${req.get('host')}`).origin;
+        res.setHeader('Cache-Control', 'no-cache');
+        res.type('html').send(indexHtml.replace(
+            apiBaseMeta,
+            `<meta name="charanex-api-base" content="${apiOrigin}">`
+        ));
+    }));
+
+    const frontendFiles = ['style.css', 'features.css', 'script.js', 'robots.txt', 'sitemap.xml'];
+    app.get(frontendFiles.map(file => `/${file}`), (req, res, next) => {
+        const filePath = path.join(frontendDirectory, path.basename(req.path));
+        res.sendFile(filePath, error => {
+            if (error) next(error);
+        });
+    });
+    app.use('/assets', express.static(path.join(frontendDirectory, 'assets'), {
+        index: false,
+        dotfiles: 'deny'
+    }));
     app.use((_req, res) => res.status(404).json({ error: 'Not found.' }));
 
     app.use((error, _req, res, _next) => {

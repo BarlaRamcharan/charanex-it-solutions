@@ -104,6 +104,24 @@ test('database health endpoint reports availability and database failures', asyn
     assert.deepEqual(unavailable.body, { error: 'The request could not be completed. Please try again.' });
 });
 
+test('backend serves the existing frontend at the root without exposing backend files', async t => {
+    const { app, database } = await createTestContext();
+    t.after(() => database.end());
+
+    const homepage = await request(app).get('/');
+    assert.equal(homepage.status, 200);
+    assert.match(homepage.headers['content-type'], /text\/html/);
+    assert.match(homepage.text, /Building digital solutions/);
+    assert.match(homepage.text, /<meta name="charanex-api-base" content="http:\/\/127\.0\.0\.1:\d+">/);
+
+    for (const file of ['/style.css', '/features.css', '/script.js', '/assets/founder.jpg']) {
+        assert.equal((await request(app).get(file)).status, 200, `${file} should be served`);
+    }
+    const backendFile = await request(app).get('/backend/src/config.js');
+    assert.equal(backendFile.status, 404);
+    assert.deepEqual(backendFile.body, { error: 'Not found.' });
+});
+
 test('public API exposes only the configured site origin and serves an unprivileged admin shell', async t => {
     const { app, database } = await createTestContext();
     t.after(() => database.end());
