@@ -1,5 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { loadConfig } = require('../src/config');
 
 const validEnv = {
@@ -19,18 +22,45 @@ test('configuration validates PostgreSQL URLs, port, session secret, and fronten
     assert.equal(loadConfig(validEnv).frontendOrigin, 'https://example.test');
 });
 
-test('production PostgreSQL connections require TLS unless explicitly disabled', () => {
+test('production PostgreSQL connections require TLS and a readable root CA certificate', t => {
     const productionEnv = { ...validEnv, NODE_ENV: 'production' };
-    assert.equal(loadConfig(productionEnv).databaseSsl, true);
-    assert.equal(loadConfig({ ...productionEnv, PGSSLMODE: 'disable' }).databaseSsl, false);
+    assert.throws(() => loadConfig(productionEnv), /PGSSLROOTCERT must point to the Supabase root CA/);
+    assert.throws(() => loadConfig({
+        ...productionEnv,
+        PGSSLMODE: 'disable',
+        PGSSLROOTCERT: 'root-ca.pem'
+    }), /Production PostgreSQL connections must use TLS/);
+
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'charanex-postgres-ca-'));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const caPath = path.join(directory, 'root-ca.pem');
+    const ca = '-----BEGIN CERTIFICATE-----\ntrusted-root\n-----END CERTIFICATE-----';
+    fs.writeFileSync(caPath, ca);
+    const productionConfig = loadConfig({
+        ...productionEnv,
+        PGSSLROOTCERT: caPath
+    });
+    assert.equal(productionConfig.databaseSsl, true);
+    assert.equal(productionConfig.databaseCa, ca);
+    assert.throws(() => loadConfig({
+        ...productionEnv,
+        PGSSLROOTCERT: path.join(directory, 'missing.pem')
+    }), /PGSSLROOTCERT must point to a readable/);
+
     const urlSslConfig = loadConfig({
         ...validEnv,
-        DATABASE_URL: `${validEnv.DATABASE_URL}?sslmode=disable`,
-        NODE_ENV: 'production'
+        DATABASE_URL: `${validEnv.DATABASE_URL}?sslmode=require`,
+        NODE_ENV: 'production',
+        PGSSLROOTCERT: caPath
     });
     assert.equal(urlSslConfig.databaseSsl, true);
+    assert.equal(urlSslConfig.databaseCa, ca);
     assert.equal(new URL(urlSslConfig.databaseUrl).searchParams.has('sslmode'), false);
-    assert.throws(() => loadConfig({ ...validEnv, PGSSLMODE: 'allow' }), /PGSSLMODE must be either require or disable/);
+    assert.throws(() => loadConfig({
+        ...validEnv,
+        PGSSLMODE: 'allow',
+        PGSSLROOTCERT: caPath
+    }), /PGSSLMODE must be either require or disable/);
 });
 
 test('SMTP notifications are disabled unless all settings are present', () => {

@@ -1,3 +1,6 @@
+const fs = require('node:fs');
+const path = require('node:path');
+
 function loadConfig(env = process.env) {
     const production = env.NODE_ENV === 'production';
     const port = Number(env.PORT || 3000);
@@ -32,6 +35,27 @@ function loadConfig(env = process.env) {
     if (!['require', 'disable'].includes(sslMode)) {
         throw new Error('PGSSLMODE must be either require or disable.');
     }
+    if (production && sslMode !== 'require') {
+        throw new Error('Production PostgreSQL connections must use TLS with PGSSLMODE=require.');
+    }
+
+    let databaseCa;
+    if (env.PGSSLROOTCERT) {
+        try {
+            databaseCa = fs.readFileSync(path.resolve(env.PGSSLROOTCERT), 'utf8');
+        } catch {
+            throw new Error('PGSSLROOTCERT must point to a readable PostgreSQL root CA certificate file.');
+        }
+        if (!databaseCa.includes('-----BEGIN CERTIFICATE-----')
+            || !databaseCa.includes('-----END CERTIFICATE-----')) {
+            throw new Error('PGSSLROOTCERT must contain a PEM-encoded root CA certificate.');
+        }
+    } else if (production) {
+        throw new Error('PGSSLROOTCERT must point to the Supabase root CA certificate file in production.');
+    }
+    if (databaseCa && sslMode !== 'require') {
+        throw new Error('PGSSLROOTCERT requires PGSSLMODE=require.');
+    }
 
     if (!env.SESSION_SECRET || env.SESSION_SECRET.length < 32) {
         throw new Error('SESSION_SECRET must contain at least 32 characters.');
@@ -65,6 +89,7 @@ function loadConfig(env = process.env) {
         port,
         databaseUrl,
         databaseSsl: sslMode === 'require',
+        databaseCa,
         sessionSecret: env.SESSION_SECRET,
         frontendOrigin,
         production,
