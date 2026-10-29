@@ -1,0 +1,30 @@
+{
+  "name": "charanex-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Backend services for the CharanEx IT Solutions website",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch --env-file=.env src/server.js",
+    "migrate": "node src/migrate.js",
+    "admin:create": "node src/create-admin.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "better-sqlite3": "^12.11.1",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "express-session": "^1.18.2",
+    "helmet": "^8.1.0",
+    "multer": "^2.0.2",
+    "nodemailer": "^10.3.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.1.4"
+  }
+}

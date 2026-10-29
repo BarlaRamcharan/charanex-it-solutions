@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#071827">
+    <title>CharanEx Admin</title>
+    <link rel="stylesheet" href="/admin-assets/admin.css">
+    <script src="/admin-assets/admin.js" defer></script>
+</head>
+<body>
+    <main class="shell">
+        <header class="topbar">
+            <a class="brand" href="/">Charan<span>Ex</span><small>IT SOLUTIONS / ADMIN</small></a>
+            <button id="logout" class="button secondary" type="button" hidden>Sign out</button>
+        </header>
+
+        <section id="login-panel" class="panel login-panel" aria-labelledby="login-title">
+            <p class="eyebrow">SECURE ADMINISTRATION</p>
+            <h1 id="login-title">Sign in</h1>
+            <p>Use an authorised administrator account to continue.</p>
+            <form id="login-form">
+                <label>Email<input name="email" type="email" autocomplete="username" required maxlength="254"></label>
+                <label>Password<input name="password" type="password" autocomplete="current-password" required maxlength="128"></label>
+                <button class="button primary" type="submit">Sign in</button>
+            </form>
+        </section>
+
+        <p id="notice" class="notice" role="status" aria-live="polite"></p>
+        <section id="dashboard" hidden aria-labelledby="dashboard-title">
+            <div class="dashboard-heading">
+                <div><p class="eyebrow">PRIVATE WORKSPACE</p><h1 id="dashboard-title">Dashboard</h1></div>
+                <p id="signed-in-as" class="muted"></p>
+            </div>
+            <section class="summary-cards" aria-label="Workspace counts">
+                <article class="summary-card"><span>Enquiries</span><strong id="summary-enquiries">0</strong></article>
+                <article class="summary-card"><span>Applications</span><strong id="summary-applications">0</strong></article>
+                <article class="summary-card"><span>Active listings</span><strong id="summary-active-jobs">0</strong></article>
+            </section>
+            <nav class="tabs" aria-label="Admin sections">
+                <button type="button" class="tab active" data-tab="enquiries">Enquiries</button>
+                <button type="button" class="tab" data-tab="applications">Applications</button>
+                <button type="button" class="tab" data-tab="jobs">Careers listings</button>
+            </nav>
+            <section id="enquiries-panel" class="panel data-panel" aria-labelledby="enquiries-title">
+                <div class="section-heading"><div><p class="eyebrow">INBOUND</p><h2 id="enquiries-title">Enquiries</h2></div>
+                    <div class="filters"><label class="sr-only" for="enquiry-search">Search enquiries</label><input id="enquiry-search" placeholder="Search name, email or service"><label class="sr-only" for="enquiry-status">Filter enquiries by status</label><select id="enquiry-status"><option value="">All statuses</option><option value="new">New</option><option value="in_progress">In progress</option><option value="closed">Closed</option></select></div>
+                </div>
+                <div id="enquiries-list" class="record-list"></div>
+            </section>
+
+            <section id="applications-panel" class="panel data-panel" aria-labelledby="applications-title" hidden>
+                <div class="section-heading"><div><p class="eyebrow">CANDIDATES</p><h2 id="applications-title">Applications</h2></div>
+                    <div class="filters"><label class="sr-only" for="application-search">Search applications</label><input id="application-search" placeholder="Search name, email, role or education"><label class="sr-only" for="application-status">Filter applications by status</label><select id="application-status"><option value="">All statuses</option><option value="new">New</option><option value="reviewing">Reviewing</option><option value="shortlisted">Shortlisted</option><option value="interview">Interview</option><option value="selected">Selected</option><option value="rejected">Rejected</option></select></div>
+                </div>
+                <div id="applications-list" class="record-list"></div>
+            </section>
+
+            <section id="jobs-panel" class="panel data-panel" aria-labelledby="jobs-title" hidden>
+                <div class="section-heading"><div><p class="eyebrow">CAREERS</p><h2 id="jobs-title">Job listings</h2></div></div>
+                <form id="job-form" class="job-form">
+                    <input name="id" type="hidden">
+                    <label>Role title<input name="title" required maxlength="160"></label>
+                    <label>Department<input name="department" required maxlength="120"></label>
+                    <div class="form-row">
+                        <label>Job type<select name="jobType" required><option value="full_time">Full-time</option><option value="part_time">Part-time</option><option value="internship">Internship</option><option value="contract">Contract</option></select></label>
+                        <label>Experience level<input name="experienceLevel" required maxlength="100"></label>
+                    </div>
+                    <label>Description<textarea name="description" rows="4" required maxlength="10000"></textarea></label>
+                    <label>Responsibilities<textarea name="responsibilities" rows="4" required maxlength="10000"></textarea></label>
+                    <label>Eligibility / qualifications<textarea name="qualifications" rows="4" required maxlength="10000"></textarea></label>
+                    <label>Required skills <span class="muted">(one per line)</span><textarea name="skills" rows="3" required maxlength="4000"></textarea></label>
+                    <div class="form-row">
+                        <label>Location<input name="location" required maxlength="160"></label>
+                        <label>Work mode<select name="workMode" required><option value="onsite">On-site</option><option value="hybrid">Hybrid</option><option value="remote">Remote</option></select></label>
+                    </div>
+                    <div class="form-row">
+                        <label>Salary or stipend range <span class="muted">(only when confirmed)</span><input name="salaryRange" maxlength="120"></label>
+                        <label>Number of openings <span class="muted">(only when confirmed)</span><input name="openings" type="number" min="1" step="1"></label>
+                    </div>
+                    <div class="form-row">
+                        <label>Application deadline<input name="deadline" type="date"></label>
+                        <label>Listing status<select name="status" required><option value="draft">Draft</option><option value="published">Published</option><option value="closed">Closed</option></select></label>
+                    </div>
+                    <div class="actions"><button id="save-job" class="button primary" type="submit">Create listing</button><button id="cancel-job-edit" class="button secondary" type="button" hidden>Cancel edit</button></div>
+                </form>
+                <div id="jobs-list" class="record-list"></div>
+            </section>
+        </section>
+    </main>
+</body>
+</html>
